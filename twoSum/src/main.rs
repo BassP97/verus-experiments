@@ -29,7 +29,7 @@ verus! {
         spec fn contains_two_elements_that_add_to_target(nums: Seq<u32>, target: u32, index1: nat) -> (res: bool)
         decreases index1,
         {
-            (index1 > -1 && nums.len() > 1)
+            (index1 > 0 && nums.len() > 1)
             && (
                 (check_pairs_including_num_at_index(nums, target, index1, (nums.len()-1) as nat))
                 ||
@@ -37,8 +37,20 @@ verus! {
             )
         }
 
+        fn runtime_sum(val1: u32, val2: u32) -> (res: u32)
+        requires
+            val1 + val2 <= 200000000
+        ensures
+            res == val1 + val2 //kinda silly
+        {
+            return val1 + val2
+        }
+
+
         fn two_sum(s: Vec<u32>, target:u32) -> (res: bool)
         requires
+            s.len() >= 2,
+            target < 100000000,
             forall|i: nat| i < s.len() ==> s[i as int] < 100000000 && s[i as int] >= 0 , // overflow? better way of doing this?
             0 < target < 100000000,
         ensures
@@ -47,26 +59,47 @@ verus! {
             let mut seen:Vec<u32> = Vec::new();
             let mut found_sum = false;
             let mut idx = 0;
+            let mut looking_for = 0;
 
             while idx < s.len()
                 invariant
-                    idx <= s.len(),
-                    exists|x: int, y: int| (x < idx && y < idx && && x != y && s[x] + s[y] == target) <==> found_sum,
+                    idx < s.len() ==> s[idx as int] < 100000000,
+                    0 < target < 100000000,
+                    idx < s.len(),
+                    (exists|x: nat, y: nat| x < idx < s.len() && y < idx < s.len() && x != y && s[x as int] + s[y as int] == target) ==> found_sum,
+                    forall|x: nat| x < idx < s.len() ==> seen[x as int] == s[x as int]
             {
-                let elem = s[idx];
-                let lookingFor = target - elem;
-                let idx2 = 0;
-                while idx2 < seen.len() {
-                    if seen[idx2] == lookingFor {
+                looking_for = runtime_sum(target, s[idx]);
+                let mut idx2 = 0;
+                while idx2 < seen.len()
+                invariant
+                    s[idx as int] < 100000000,
+                    0 < target < 100000000,
+                    0 <= idx <= s.len(),
+                    (exists|x: nat| seen[x as int] == looking_for) ==> found_sum,
+                    idx2 <= seen.len(),
+                    looking_for == target + s[idx as int]
+                {
+                    if seen[idx2] == looking_for {
                         found_sum = true;
+                        proof {
+                            assert(looking_for == target + s[idx as int]);
+                            assert(exists|x: nat, y: nat| x < idx < s.len() && y < idx < s.len() && x != y && (s[x as int] + s[y as int]  == target));
+                        }
                     }
+                    idx2 += 1
                 }
-                idx += 1;
+                seen.push(s[idx]);
+                idx = idx + 1;
             }
             found_sum
         }
 
         fn prove_two_sum(){
+            proof {
+                reveal_with_fuel(contains_two_elements_that_add_to_target, 100);
+                reveal_with_fuel(check_pairs_including_num_at_index, 100)
+            }
             let mut v: Vec<u32> = Vec::new();
             v.push(0);
             v.push(10);
