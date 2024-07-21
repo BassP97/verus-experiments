@@ -11,62 +11,71 @@ verus! {
 
     mod two_sum_module {
         use vstd::prelude::*;
-        use std::collections::BTreeSet;
+        use std::collections::HashSet;
 
-        #[verifier::external_fn_specification]
-        fn addElement(set: &mut BTreeSet<u32>, element: u32) -> (res: Set<int>)
-        ensures
-            res == set![element as int]
-        {
-            set.insert(element);
-            set![element as int]
+        #[verifier::reject_recursive_types(T)]
+        #[verifier::external_body]
+        struct ExternalHashSet<T> {
+            inner: HashSet<T>,
         }
 
-        #[verifier::external_fn_specification]
-        fn containsElement(set: &mut BTreeSet<u32>, element: u32, ghostSet: Set<int>) -> (res: bool)
-        ensures
-            res <==> ghostSet.contains(element as int)
+        #[verifier::external_body]
+        impl<T> ExternalHashSet<T> 
+        where
+            T: std::cmp::Eq + std::hash::Hash + builtin::Integer,
         {
-            #[verifier::external_fn_specification]
-            set.contains(&element)
+            #[verifier::external_body]
+            pub fn new() -> Self {
+                ExternalHashSet {
+                    inner: HashSet::new(),
+                }
+            }
+
+            #[verifier::external_body]
+            pub fn insert(&mut self, value: T) -> (res: Set<int>)
+            ensures
+                res == set![value as int]
+            {
+                self.inner.insert(value);
+                return set![value as int];
+            }
+        
+            #[verifier::external_body]
+            pub fn contains(&self, value: &T) -> (res: bool)
+
+            {
+                self.inner.contains(value)
+            }
         }
 
-        fn two_sum(s: Vec<u32>, target:u32) -> (res: bool)
+        fn two_sum(s: Vec<u64>, target:u64) -> (res: bool)
         requires
-            forall|i: int| 0 <= i < s.len() ==> 0 < s[i] < 100000000, // overflow? better way of doing this?
+            forall|i: nat| i < s.len() ==> s[i as int] < 100000000 && s[i as int] > 0 , // overflow? better way of doing this?
             0 < target < 100000000,
         ensures
-            exists|x: int, y: int| s[x] + s[y] == target <==> res
+            exists|x: nat, y: nat| x < s.len() && y < s.len() && s[x as int] + s[y as int] == target <==> res
         {
-            let mut seen: BTreeSet<u32> = BTreeSet::new(); 
+            let mut seen = ExternalHashSet::new(); 
             let mut found_sum = false;
-            let n = s.len();
             let mut idx = 0;
 
-            let seenGhostSet: Set<int> =  Set::empty();
-            while idx < n
+            while idx <  s.len()
                 invariant
-                    idx <= n,
-                    exists|x: int| seenGhostSet.contains(x) && x + s[idx as int] == target <==> found_sum
+                    idx <= s.len(),
+                    exists|x: int, y: int| x < idx && y < idx && s[x] + s[y] == target <==> found_sum
             {
                 let elem = s[idx];
-                let lookingFor = target - elem;
+                let lookingFor: u64 = target - elem;
                 if (seen.contains(&lookingFor)){
                     found_sum = true;
                 }
-                let singletonGhostElemSet: Set<int> = addElement(&mut seen, elem);
-                proof {
-                    seenGhostSet = seenGhostSet + singletonGhostElemSet;
-                    assert(seenGhostSet.contains(elem as int));
-                }
-                idx -= 1;
+                idx += 1;
             }
             found_sum
         }
     }
 
-fn main() {
-
-}
-
+    fn main() {
+        
+    }
 } // verus!
